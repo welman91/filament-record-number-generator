@@ -1,0 +1,82 @@
+{
+  "name": "welman91/filament-record-number-generator",
+  "description": "Configurable auto-generate record number for Filament",
+  "keywords": [
+    "welman91",
+    "laravel",
+    "filamentphp",
+    "filament",
+    "filament-plugin",
+    "filament-record-number-generator"
+  ],
+  "homepage": "https://github.com/welman91/filament-record-number-generator",
+  "support": {
+    "issues": "https://github.com/welman91/filament-record-number-generator/issues",
+    "source": "https://github.com/welman91/filament-record-number-generator"
+  },
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "Welman",
+      "email": "welman91ers@gmail.com",
+      "role": "Developer"
+    }
+  ],
+  "require": {
+    "php": "^8.2",
+    "filament/filament": "^5.0",
+    "spatie/laravel-package-tools": "^1.15.0"
+  },
+  "require-dev": {
+    "larastan/larastan": "^3.0",
+    "laravel/pint": "^1.0",
+    "nunomaduro/collision": "^8.0",
+    "orchestra/testbench": "^9.0|^10.0|^11.0",
+    "pestphp/pest": "^3.7|^4.0",
+    "pestphp/pest-plugin-arch": "^3.0|^4.0",
+    "pestphp/pest-plugin-laravel": "^3.0|^4.0",
+    "pestphp/pest-plugin-livewire": "^3.0|^4.0",
+    "rector/rector": "^2.0",
+    "spatie/laravel-ray": "^1.26"
+  },
+  "autoload": {
+    "psr-4": {
+      "Welman91\\FilamentRecordNumberGenerator\\": "src/",
+      "Welman91\\FilamentRecordNumberGenerator\\Database\\Factories\\": "database/factories/"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "Welman91\\FilamentRecordNumberGenerator\\Tests\\": "tests/"
+    }
+  },
+  "scripts": {
+    "post-autoload-dump": "@php ./vendor/bin/testbench package:discover --ansi",
+    "analyse": "phpstan analyse",
+    "lint": "pint",
+    "refactor": "rector",
+    "test": "pest",
+    "test:lint": "pint --test",
+    "test:refactor": "rector --dry-run"
+  },
+  "extra": {
+    "laravel": {
+      "providers": [
+        "Welman91\\FilamentRecordNumberGenerator\\FilamentRecordNumberGeneratorServiceProvider"
+      ],
+      "aliases": {
+        "FilamentRecordNumberGenerator": "Welman91\\FilamentRecordNumberGenerator\\Facades\\FilamentRecordNumberGenerator"
+      }
+    }
+  },
+  "config": {
+    "sort-packages": true,
+    "allow-plugins": {
+      "composer/package-versions-deprecated": true,
+      "pestphp/pest-plugin": true,
+      "phpstan/extension-installer": true
+    }
+  },
+  "minimum-stability": "dev",
+  "prefer-stable": true
+}
