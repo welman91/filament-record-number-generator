@@ -1,87 +1,284 @@
-# "Configurable auto-generate record number for Filament"
+# Filament Record Number Generator
 
-[![Latest Version on Packagist](https://img.shields.io/packagist/v/welman91/filament-record-number-generator.svg?style=flat-square)](https://packagist.org/packages/welman91/filament-record-number-generator)
-[![GitHub Tests Action Status](https://img.shields.io/github/actions/workflow/status/welman91/filament-record-number-generator/run-tests.yml?branch=main&label=tests&style=flat-square)](https://github.com/welman91/filament-record-number-generator/actions?query=workflow%3Arun-tests+branch%3Amain)
-[![GitHub Code Style Action Status](https://img.shields.io/github/actions/workflow/status/welman91/filament-record-number-generator/fix-php-code-style-issues.yml?branch=main&label=code%20style&style=flat-square)](https://github.com/welman91/filament-record-number-generator/actions?query=workflow%3A"Fix+PHP+code+styling"+branch%3Amain)
-[![Total Downloads](https://img.shields.io/packagist/dt/welman91/filament-record-number-generator.svg?style=flat-square)](https://packagist.org/packages/welman91/filament-record-number-generator)
-
-
-
-This is where your description should go. Limit it to a paragraph or two. Consider adding a small example.
+Configurable auto-numbering for any Eloquent model in Filament (v4, v5) . Supports patterns like `INV-2026-0001`, `PO/{branch}/{sequence}`, per-tenant sequences, fiscal year resets, gap-free mode, and prefix/suffix rules.
 
 ## Installation
 
-You can install the package via composer:
+Add the package to your Laravel project:
 
 ```bash
 composer require welman91/filament-record-number-generator
 ```
 
-> [!IMPORTANT]
-> If you have not set up a custom theme and are using Filament Panels follow the instructions in the [Filament Docs](https://filamentphp.com/docs/4.x/styling/overview#creating-a-custom-theme) first.
-
-After setting up a custom theme add the plugin's views to your theme css file or your app's css file if using the standalone packages.
-
-```css
-@source '../../../../vendor/welman91/filament-record-number-generator/resources/**/*.blade.php';
-```
-
-You can publish and run the migrations with:
+Publish and run the migrations:
 
 ```bash
-php artisan vendor:publish --tag="filament-record-number-generator-migrations"
+php artisan vendor:publish --tag=filament-record-number-generator-migrations
 php artisan migrate
 ```
 
-You can publish the config file with:
+Optionally publish the config file:
 
 ```bash
-php artisan vendor:publish --tag="filament-record-number-generator-config"
+php artisan vendor:publish --tag=filament-record-number-generator-config
 ```
 
-Optionally, you can publish the views using
+## Setup
+
+### 1. Register the Plugin
+
+Add the plugin to your Filament panel provider:
+
+```php
+use Welman91\FilamentRecordNumberGenerator\FilamentRecordNumberGeneratorPlugin;
+
+public function panel(Panel $panel): Panel
+{
+    return $panel
+        ->plugin(
+            FilamentRecordNumberGeneratorPlugin::make()
+                ->navigationGroup('Settings') // optional, defaults to "Settings"
+        );
+}
+```
+
+### 2. Add the Trait to Your Models
+
+Add `HasNumbering` to any model that needs auto-numbering:
+
+```php
+use Welman91\FilamentRecordNumberGenerator\Concerns\HasNumbering;
+
+class Invoice extends Model
+{
+    use HasNumbering;
+
+    // Optional: explicitly declare which attributes to auto-number.
+    // If omitted, the trait auto-detects from the numbering_sequences table.
+    protected array $numberingFields = ['invoice_number'];
+}
+```
+
+### 3. Create a Numbering Sequence
+
+Navigate to **Settings > Numbering Sequences** in your Filament panel and create a sequence, or insert one directly:
+
+```php
+use Welman91\FilamentRecordNumberGenerator\Models\NumberingSequence;
+
+NumberingSequence::create([
+    'company_id'              => 1,           // tenant scope (null for global)
+    'name'                    => 'Invoice Number',
+    'model_type'              => \App\Models\Invoice::class,
+    'attribute'               => 'invoice_number',
+    'pattern'                 => 'INV-{year}-{sequence:4}',
+    'reset_frequency'         => 'yearly',    // never, yearly, monthly, daily
+    'fiscal_year_start_month' => 1,           // 1 = January
+    'is_gap_free'             => true,
+    'is_active'               => true,
+    'initial_value'           => 1,
+]);
+```
+
+Now every time an `Invoice` is created, the `invoice_number` attribute is automatically filled (e.g. `INV-2026-0001`, `INV-2026-0002`, ...).
+
+## Pattern Tokens
+
+| Token | Example Output | Description |
+|---|---|---|
+| `{sequence}` | `0001` | Zero-padded sequence (default 4 digits) |
+| `{sequence:N}` | `000001` | Zero-padded to N digits |
+| `{year}` | `2026` | 4-digit year |
+| `{year:2}` | `26` | 2-digit year |
+| `{month}` | `04` | Zero-padded month |
+| `{day}` | `07` | Zero-padded day |
+| `{prefix}` | `INV-` | Value from the sequence's `prefix` column |
+| `{suffix}` | `-A` | Value from the sequence's `suffix` column |
+| `{attribute:name}` | `Acme` | Model attribute (supports dot notation for relations) |
+
+### Example Patterns
+
+| Pattern | Output |
+|---|---|
+| `INV-{year}-{sequence:4}` | `INV-2026-0001` |
+| `PO/{attribute:branch.code}/{sequence:5}` | `PO/HQ/00001` |
+| `{prefix}{year:2}{month}-{sequence:3}{suffix}` | `CR-2604-001-A` |
+| `REC-{sequence:6}` | `REC-000001` |
+
+## Custom Token Aliases
+
+You can define custom token names that map to built-in resolvers, either via the admin UI or in the `custom_tokens` JSON column:
+
+```php
+NumberingSequence::create([
+    // ...
+    'pattern'       => '{branch}-{year}-{sequence:4}',
+    'custom_tokens' => [
+        'branch' => 'attribute:branch.code', // {branch} resolves to $model->branch->code
+    ],
+]);
+```
+
+## Custom Token Resolvers
+
+Create a class implementing `TokenResolver` for completely custom logic:
+
+```php
+use Welman91\FilamentRecordNumberGenerator\Contracts\TokenResolver;
+
+class DepartmentCodeResolver implements TokenResolver
+{
+    public function resolve(string $token, ?string $argument, array $context): string
+    {
+        return $context['model']->department->short_code ?? 'GEN';
+    }
+
+    public function supports(string $token): bool
+    {
+        return $token === 'dept';
+    }
+}
+```
+
+Register it in `config/filament-record-number-generator.php`:
+
+```php
+'custom_resolvers' => [
+    \App\NumberingResolvers\DepartmentCodeResolver::class,
+],
+```
+
+Then use `{dept}` in your patterns.
+
+## Reset Frequency
+
+| Frequency | Behavior |
+|---|---|
+| `never` | Counter never resets — continuous numbering |
+| `yearly` | Resets at the start of each fiscal year |
+| `monthly` | Resets at the start of each month |
+| `daily` | Resets at the start of each day |
+
+### Fiscal Year
+
+When `reset_frequency` is `yearly`, the `fiscal_year_start_month` determines when the year rolls over:
+
+- `1` (January) — standard calendar year
+- `4` (April) — fiscal year runs Apr–Mar (e.g. Jan 2026 belongs to fiscal year 2025)
+- `7` (July) — fiscal year runs Jul–Jun
+
+## Gap-Free Mode
+
+When `is_gap_free` is `true`, the package uses database row-level locking (`SELECT ... FOR UPDATE`) to guarantee no gaps in the sequence. The counter increment and model save happen within the same transaction — if the save fails, the counter rolls back.
+
+**Trade-off:** Gap-free mode serializes concurrent requests for the same sequence. Use it only when regulatory or business requirements demand unbroken sequences (e.g. invoice numbers).
+
+When `is_gap_free` is `false` (default), an atomic increment is used. Gaps may occur if a model creation fails after the counter is incremented, but throughput is higher.
+
+## Per-Tenant Isolation
+
+Each numbering sequence is scoped by `company_id`. Two companies with the same sequence pattern maintain independent counters:
+
+- Company A: `INV-2026-0001`, `INV-2026-0002`, ...
+- Company B: `INV-2026-0001`, `INV-2026-0002`, ...
+
+Set `company_id` to `null` for a global sequence shared across all tenants.
+
+## Manual Override
+
+If a model's numbered attribute is already filled before creation, the trait skips auto-generation. This allows manual number entry when needed:
+
+```php
+Invoice::create([
+    'invoice_number' => 'MANUAL-001', // trait won't overwrite this
+    // ...
+]);
+```
+
+## Programmatic Usage
+
+### Generate a Number
+
+```php
+use Welman91\FilamentRecordNumberGenerator\Services\NumberingEngine;
+
+$engine = app(NumberingEngine::class);
+$number = $engine->generate($invoice);
+```
+
+### Preview the Next Number
+
+Returns what the next number will be without consuming a counter value:
+
+```php
+$engine = app(NumberingEngine::class);
+$preview = $engine->preview($invoice);
+// e.g. "INV-2026-0043"
+```
+
+### On the Model
+
+```php
+$invoice->generateNumber('invoice_number');
+$invoice->previewNextNumber('invoice_number');
+```
+
+## Events
+
+The `NumberGenerated` event is dispatched after each number is generated:
+
+```php
+use Welman91\FilamentRecordNumberGenerator\Events\NumberGenerated;
+
+Event::listen(NumberGenerated::class, function (NumberGenerated $event) {
+    // $event->model
+    // $event->attribute
+    // $event->generatedNumber
+    // $event->sequence
+});
+```
+
+## Plugin Configuration
+
+| Method | Description |
+|---|---|
+| `sequenceResource(false)` | Disable the Numbering Sequences resource in the panel |
+| `navigationGroup('Admin')` | Change the navigation group |
+
+```php
+FilamentRecordNumberGeneratorPlugin::make()
+    ->sequenceResource(true)
+    ->navigationGroup('Administration')
+```
+
+## Config File
+
+After publishing, the config is at `config/filament-record-number-generator.php`:
+
+| Key | Default | Description |
+|---|---|---|
+| `default_pattern` | `{prefix}{year}-{sequence:4}{suffix}` | Default pattern for new sequences |
+| `default_reset_frequency` | `yearly` | Default reset frequency |
+| `default_fiscal_year_start_month` | `1` | Default fiscal year start |
+| `default_gap_free` | `false` | Default gap-free mode |
+| `navigation_group` | `Settings` | Filament navigation group |
+| `custom_resolvers` | `[]` | Custom token resolver classes |
+
+## Localization
+
+The package ships with English and Arabic translations. Publish them to customize:
 
 ```bash
-php artisan vendor:publish --tag="filament-record-number-generator-views"
-```
-
-This is the contents of the published config file:
-
-```php
-return [
-];
-```
-
-## Usage
-
-```php
-$filamentRecordNumberGenerator = new Welman91\FilamentRecordNumberGenerator();
-echo $filamentRecordNumberGenerator->echoPhrase('Hello, Welman91!');
+php artisan vendor:publish --tag=filament-record-number-generator-translations
 ```
 
 ## Testing
 
 ```bash
-composer test
+php artisan test --filter=NumberingEngine
+php artisan test --filter=PatternParser
 ```
-
-## Changelog
-
-Please see [CHANGELOG](CHANGELOG.md) for more information on what has changed recently.
-
-## Contributing
-
-Please see [CONTRIBUTING](.github/CONTRIBUTING.md) for details.
-
-## Security Vulnerabilities
-
-Please review [our security policy](.github/SECURITY.md) on how to report security vulnerabilities.
-
-## Credits
-
-- [Welman](https://github.com/welman91)
-- [All Contributors](../../contributors)
 
 ## License
 
-The MIT License (MIT). Please see [License File](LICENSE.md) for more information.
+MIT
