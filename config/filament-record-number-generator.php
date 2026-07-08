@@ -2,7 +2,7 @@
 
 return [
 
-    /*
+	/*
     |--------------------------------------------------------------------------
     | Default Pattern
     |--------------------------------------------------------------------------
@@ -12,9 +12,9 @@ return [
     | {day}, {sequence}, {sequence:N}, {attribute:name}
     |
     */
-    'default_pattern' => '{prefix}{year}-{sequence:4}{suffix}',
+	'default_pattern' => '{company_prefix}-{prefix}{sequence:3}',
 
-    /*
+	/*
     |--------------------------------------------------------------------------
     | Default Reset Frequency
     |--------------------------------------------------------------------------
@@ -23,9 +23,9 @@ return [
     | Options: never, yearly, monthly, daily
     |
     */
-    'default_reset_frequency' => 'yearly',
+	'default_reset_frequency' => 'never',
 
-    /*
+	/*
     |--------------------------------------------------------------------------
     | Default Fiscal Year Start Month
     |--------------------------------------------------------------------------
@@ -34,9 +34,9 @@ return [
     | 1 = January, 4 = April, 7 = July, etc.
     |
     */
-    'default_fiscal_year_start_month' => 1,
+	'default_fiscal_year_start_month' => 1,
 
-    /*
+	/*
     |--------------------------------------------------------------------------
     | Default Gap-Free Mode
     |--------------------------------------------------------------------------
@@ -45,9 +45,9 @@ return [
     | Gap-free mode uses database row locking to ensure no gaps in sequences.
     |
     */
-    'default_gap_free' => false,
+	'default_gap_free' => true,
 
-    /*
+	/*
     |--------------------------------------------------------------------------
     | Navigation Group
     |--------------------------------------------------------------------------
@@ -56,9 +56,9 @@ return [
     | appears in the Filament panel.
     |
     */
-    'navigation_group' => 'Settings',
+	'navigation_group' => 'Settings',
 
-    /*
+	/*
     |--------------------------------------------------------------------------
     | Multi-Tenancy
     |--------------------------------------------------------------------------
@@ -75,13 +75,12 @@ return [
     | auto-incrementing integer keys.
     |
     */
-    'multi_tenancy' => [
-        'enabled' => false,
-        'column' => 'company_id',
-        'column_type' => 'unsignedBigInteger',
-    ],
+	'multi_tenancy' => [
+		'column' => 'company_id',
+		'column_type' => 'unsignedBigInteger',
+	],
 
-    /*
+	/*
     |--------------------------------------------------------------------------
     | Custom Token Resolvers
     |--------------------------------------------------------------------------
@@ -90,6 +89,6 @@ return [
     | Welman91\FilamentRecordNumberGenerator\Contracts\TokenResolver.
     |
     */
-    'custom_resolvers' => [],
+	'custom_resolvers' => [],
 
 ];

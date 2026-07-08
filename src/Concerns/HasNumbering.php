@@ -20,99 +20,94 @@ use Welman91\FilamentRecordNumberGenerator\Services\NumberingEngine;
  */
 trait HasNumbering
 {
-    /**
-     * Track models with pending gap-free transactions.
-     * Uses spl_object_id to avoid polluting model attributes.
-     *
-     * @var array<int, bool>
-     */
-    protected static array $pendingGapFreeTransactions = [];
+	/**
+	 * Track models with pending gap-free transactions.
+	 * Uses spl_object_id to avoid polluting model attributes.
+	 *
+	 * @var array<int, bool>
+	 */
+	protected static array $pendingGapFreeTransactions = [];
 
-    public static function bootHasNumbering(): void
-    {
-        static::creating(function (Model $model) {
-            /** @var Model&HasNumbering $model */
-            $engine = app(NumberingEngine::class);
-            $fields = $model->resolveNumberingFields();
+	public static function bootHasNumbering(): void
+	{
+		static::creating(function (Model $model) {
+			/** @var Model&HasNumbering $model */
+			$engine = app(NumberingEngine::class);
+			$fields = $model->resolveNumberingFields();
 
-            foreach ($fields as $attribute) {
-                // Skip if manually filled
-                if (filled($model->getAttribute($attribute))) {
-                    continue;
-                }
+			foreach ($fields as $attribute) {
+				// Skip if manually filled
+				if (filled($model->getAttribute($attribute))) {
+					continue;
+				}
 
-                try {
-                    $sequence = $engine->resolveSequence($model, $attribute);
-                } catch (ModelNotFoundException) {
-                    continue;
-                }
+				try {
+					$sequence = $engine->resolveSequence($model, $attribute);
+				} catch (ModelNotFoundException) {
+					continue;
+				}
 
-                if ($sequence->is_gap_free) {
-                    // For gap-free, wrap the entire creation in a transaction
-                    // so the counter rolls back if the model save fails.
-                    DB::beginTransaction();
+				if ($sequence->is_gap_free) {
+					// For gap-free, wrap the entire creation in a transaction
+					// so the counter rolls back if the model save fails.
+					DB::beginTransaction();
 
-                    try {
-                        $number = $engine->generateGapFree($model, $sequence, $engine->buildScopeKey($sequence, $model));
-                        $model->setAttribute($attribute, $number);
-                        static::$pendingGapFreeTransactions[spl_object_id($model)] = true;
-                    } catch (\Throwable $e) {
-                        DB::rollBack();
+					try {
+						$number = $engine->generateGapFree($model, $sequence, $engine->buildScopeKey($sequence, $model));
+						$model->setAttribute($attribute, $number);
+						static::$pendingGapFreeTransactions[spl_object_id($model)] = true;
+					} catch (\Throwable $e) {
+						DB::rollBack();
 
-                        throw $e;
-                    }
-                } else {
-                    $model->setAttribute($attribute, $engine->generate($model, $sequence));
-                }
-            }
-        });
+						throw $e;
+					}
+				} else {
+					$model->setAttribute($attribute, $engine->generate($model, $sequence));
+				}
+			}
+		});
 
-        static::created(function (Model $model) {
-            $objectId = spl_object_id($model);
+		static::created(function (Model $model) {
+			$objectId = spl_object_id($model);
 
-            if (static::$pendingGapFreeTransactions[$objectId] ?? false) {
-                DB::commit();
-                unset(static::$pendingGapFreeTransactions[$objectId]);
-            }
-        });
-    }
+			if (static::$pendingGapFreeTransactions[$objectId] ?? false) {
+				DB::commit();
+				unset(static::$pendingGapFreeTransactions[$objectId]);
+			}
+		});
+	}
 
-    /**
-     * Resolve which attributes should be auto-numbered.
-     *
-     * @return array<string>
-     */
-    public function resolveNumberingFields(): array
-    {
-        if (property_exists($this, 'numberingFields') && ! empty($this->numberingFields)) {
-            return $this->numberingFields;
-        }
+	/**
+	 * Resolve which attributes should be auto-numbered.
+	 *
+	 * @return array<string>
+	 */
+	public function resolveNumberingFields(): array
+	{
+		if (property_exists($this, 'numberingFields') && ! empty($this->numberingFields)) {
+			return $this->numberingFields;
+		}
 
-        // Auto-detect from database
-        $query = NumberingSequence::where('model_type', $this->getMorphClass())
-            ->where('is_active', true);
+		// Auto-detect from database
+		$query = NumberingSequence::where('model_type', $this->getMorphClass())
+			->where('is_active', true);
 
-        if (config('filament-record-number-generator.multi_tenancy.enabled', false)) {
-            $column = config('filament-record-number-generator.multi_tenancy.column', 'company_id');
-            $query->when($this->{$column} ?? null, fn ($q, $id) => $q->where($column, $id));
-        }
+		return $query->pluck('attribute')->all();
+	}
 
-        return $query->pluck('attribute')->all();
-    }
+	/**
+	 * Generate a number for a specific attribute on demand.
+	 */
+	public function generateNumber(?string $attribute = null): string
+	{
+		return app(NumberingEngine::class)->generate($this, attribute: $attribute);
+	}
 
-    /**
-     * Generate a number for a specific attribute on demand.
-     */
-    public function generateNumber(?string $attribute = null): string
-    {
-        return app(NumberingEngine::class)->generate($this, attribute: $attribute);
-    }
-
-    /**
-     * Preview the next number without consuming a counter value.
-     */
-    public function previewNextNumber(?string $attribute = null): string
-    {
-        return app(NumberingEngine::class)->preview($this, attribute: $attribute);
-    }
+	/**
+	 * Preview the next number without consuming a counter value.
+	 */
+	public function previewNextNumber(?string $attribute = null): string
+	{
+		return app(NumberingEngine::class)->preview($this, attribute: $attribute);
+	}
 }

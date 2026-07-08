@@ -129,13 +129,11 @@ class NumberingEngine
 	{
 		$tenantPart = 'global';
 
-		// if (config('filament-record-number-generator.multi_tenancy.enabled', false)) {
 		$column = config('filament-record-number-generator.multi_tenancy.column', 'company_id');
 
 		if ($tenantId = $model->{$column} ?? null) {
 			$tenantPart = "tenant_{$tenantId}";
 		}
-		// }
 
 		$periodPart = $this->computePeriodSegment($sequence);
 
